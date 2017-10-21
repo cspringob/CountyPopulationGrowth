@@ -31,7 +31,7 @@ runmodel.py does the fitting.  Lasso, Ridge, and Random Forest all fit on data f
 
 ### MVP results
 
-The output of runmodel.py gives summary statistics at the end for the "test" predictions for 2012-2013 growth by county ( mvpyear2012.txt ).  As has happened in every run so far, Random Forest gives a better R^2 value in the cross-validation than the linear regression models.  In this run, the R^2 is 0.465 (compared to 0.428 for both Lasso and Ridge).  The two most important features are population growth from last year and population growth over the past two years, and those dominate.  Next is current population, and then the number of people from the oldest age cohorts (the latter being negatively correlated with population growth, as shown by the Lasso coefficients.)
+The output of runmodel.py gives summary statistics at the end for the "test" predictions for 2012-2013 growth by county ( FIGS/mvpyear2012.txt ).  As has happened in every run so far, Random Forest gives a better R^2 value in the cross-validation than the linear regression models.  In this run, the R^2 is 0.465 (compared to 0.428 for both Lasso and Ridge).  The two most important features are population growth from last year and population growth over the past two years, and those dominate.  Next is current population, and then the number of people from the oldest age cohorts (the latter being negatively correlated with population growth, as shown by the Lasso coefficients.)
 
 FIGS/2012predvsactual.eps shows the actual 2012-2013 population growth (y-axis) vs. population growth predicted by the model (x-axis).
 
