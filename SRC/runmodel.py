@@ -89,6 +89,17 @@ def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filena
     f1.close()
     return las_list, rid_list, for_list
 
+def loopyears(Xdf, ydf, year, start, stop, featurelist, alphas, forest_par, filename):
+    # Uses loop_gridsearch to predict the population growth for a given year, using models trained on on the years "year-start" to "year-stop".
+    listlists = []
+    for i in range(start, stop+1):
+        yearlist = []
+        for j in range(0, i):
+            yearlist.append(year - (i - j))
+        listlists.append(yearlist)
+    laslist, ridlist, forlist = loop_gridsearch(Xdf, ydf, listlists, featurelist, alphas, forest_par, filename)
+    return laslist, ridlist, forlist
+
 if __name__ == '__main__':
     #Here's my trial with just the 2001 data:
     """Xdf = pd.read_csv('../DATA/X2001_df.csv')
@@ -193,7 +204,7 @@ if __name__ == '__main__':
     alphas = list(np.logspace(-6, 6, num = 20))
     forest_params = {'n_estimators':[50], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[5], 'n_jobs':[-1]}
     #Here are the one year lists:
-    oneyearlists = [[2006], [2007], [2008], [2009], [2010], [2011]]
+    """oneyearlists = [[2006], [2007], [2008], [2009], [2010], [2011]]
     las_list1, rid_list1, for_list1 = loop_gridsearch(Xdf, ydf, oneyearlists, featurelist, alphas, forest_params, 'oneyear.txt')
     #Two year lists:
     twoyearlists = [[2005, 2006], [2006, 2007], [2007, 2008], [2008, 2009], [2009, 2010], [2010, 2011]]
@@ -204,4 +215,50 @@ if __name__ == '__main__':
     fouryearlists = [[2003, 2004, 2005, 2006], [2004, 2005, 2006, 2007], [2005, 2006, 2007, 2008], [2006, 2007, 2008, 2009], [2007, 2008, 2009, 2010], [2008, 2009, 2010, 2011]]
     las_list4, rid_list4, for_list4 = loop_gridsearch(Xdf, ydf, fouryearlists, featurelist, alphas, forest_params, 'fouryear.txt')
     fiveyearlists = [[2002, 2003, 2004, 2005, 2006], [2003, 2004, 2005, 2006, 2007], [2004, 2005, 2006, 2007, 2008], [2005, 2006, 2007, 2008, 2009], [2006, 2007, 2008, 2009, 2010], [2007, 2008, 2009, 2010, 2011]]
-    las_list5, rid_list5, for_list5 = loop_gridsearch(Xdf, ydf, fiveyearlists, featurelist, alphas, forest_params, 'fiveyear.txt')
+    las_list5, rid_list5, for_list5 = loop_gridsearch(Xdf, ydf, fiveyearlists, featurelist, alphas, forest_params, 'fiveyear.txt')"""
+
+    #Try a longer range on the 2009, 2010, 2011, and 2012 data:
+    """las_list2012, rid_list2012, for_list2012 = loopyears(Xdf, ydf, 2012, 1, 10, featurelist, alphas, forest_params, 'year2012.txt')
+    las_list2011, rid_list2011, for_list2011 = loopyears(Xdf, ydf, 2011, 1, 9, featurelist, alphas, forest_params, 'year2011.txt')
+    las_list2010, rid_list2010, for_list2010 = loopyears(Xdf, ydf, 2010, 1, 8, featurelist, alphas, forest_params, 'year2010.txt')
+    las_list2009, rid_list2009, for_list2009 = loopyears(Xdf, ydf, 2009, 1, 7, featurelist, alphas, forest_params, 'year2009.txt')"""
+
+    #Here's my code for MVP:
+    #Predict 2012 - 2013 population growth using model trained on the previous 5 years:
+    forest_params2 = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    las_mvp2012, rid_mvp2012, for_mvp2012 = loopyears(Xdf, ydf, 2012, 10, 10, featurelist, alphas, forest_params2, 'mvpyear2012.txt')
+
+    #Here are some stats on the random forest fit:
+    print(for_mvp2012[0].best_score_, for_mvp2012[0].best_params_, for_mvp2012[0].best_estimator_.feature_importances_)
+    """Outputs this:
+    0.464784618544 {'n_estimators': 200, 'max_features': 0.5, 'n_jobs': -1, 'min_samples_leaf': 5} [ 0.20200158  0.35152289  0.01643884  0.01576634  0.014535    0.0124183
+    0.01350719  0.01417823  0.01462276  0.01889867  0.01645419  0.0160191
+    0.0199875   0.01496215  0.01587672  0.01474533  0.01448669  0.0160427
+    0.01636132  0.0294987   0.0260299   0.02672802  0.05109176  0.01254849
+    0.01266728  0.02261034]"""
+
+    #And from the Lasso fit:
+    print(las_mvp2012[0].best_score_, las_mvp2012[0].best_params_, las_mvp2012[0].best_estimator_.coef_)
+    """0.428498139944 {'alpha': 4.2813323987193961e-06} [  6.79233757e-04   2.89897621e-03  -3.65415817e-05  -2.95148346e-04
+   2.66427313e-04  -1.46531893e-04  -1.45809806e-04  -1.16365957e-04
+   1.71028896e-04  -3.30219529e-04   1.25247711e-04   1.63371812e-04
+   1.46160533e-04  -0.00000000e+00  -2.82630758e-04   2.84978324e-04
+  -4.83988841e-05  -5.98574736e-04   2.57896107e-04   7.73185549e-06
+  -1.16388906e-04  -3.40103429e-04   1.93702845e-04   9.06024077e-05
+   5.85477692e-06   1.63103497e-04]"""
+
+    #Let's plot model predictions vs. actual growth:
+    Xt = select_years(Xdf, [2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011])
+    yt = select_years(ydf, [2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011])
+    Xt2 = select_years(Xdf, [2012])
+    yt2 = select_years(ydf, [2012])
+    X = Xt[featurelist]
+    y = yt['POP_GROWTH_F1']
+    Xtest = Xt2[featurelist]
+    ytest = yt2['POP_GROWTH_F1']
+    scaler = StandardScaler()
+    Xscale = scaler.fit_transform(X)
+    Xscaletest = scaler.transform(Xtest)
+    ypred = for_mvp2012[0].best_estimator_.predict(Xscaletest)
+    plt.scatter(ytest.values, ypred)
+    plt.savefig('2012predvsactual.eps')

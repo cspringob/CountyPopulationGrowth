@@ -58,6 +58,7 @@ if __name__ == '__main__':
 
     #Now select the years to look at:
     myyears = [2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012]
+    #Everything after 2012 is provisionally going to be "test data, that I'm not going to look at."
     X2000s = select_years(df_feature, myyears)
     y2000s = select_years(dfy, myyears)
 

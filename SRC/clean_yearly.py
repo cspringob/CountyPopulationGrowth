@@ -185,9 +185,10 @@ if __name__ == '__main__':
     df_y1.to_csv('../DATA/y1_df.csv')
     df_y5.to_csv('../DATA/y5_df.csv')
 
-    #This is the initial round of feature addition.  Everything before this was used to get the initial dataframes:
+    #This is the initial round of feature addition.  Everything before this was used to get the initial dataframes.
+    #Meaning, if I run this again, I can comment out everything below.....
 
-    #Now, add a few features to the dataset:
+    """#Now, add a few features to the dataset:
     #Fraction of the population under 5 years old:
     df_feature['under5_frac'] = df_feature[1].astype(float) / df_feature[0].astype(float)
     #Fraction of the population under 20 years old:
@@ -215,7 +216,7 @@ if __name__ == '__main__':
     plt.savefig('latlonplot.eps')
 
     #Looks like we might have some discrepant data across the Atlantic Ocean.  Let's select everything that's outside the continental US:
-    X2001[(X2001['INTPTLAT'] > 50) | (X2001['INTPTLAT'] < 25) | (X2001['INTPTLONG'] > -50) | (X2001['INTPTLONG'] < -130)][['GEOID', 'NAME', 'USPS', 'INTPTLAT', 'INTPTLONG']]
+    X2001[(X2001['INTPTLAT'] > 50) | (X2001['INTPTLAT'] < 25) | (X2001['INTPTLONG'] > -50) | (X2001['INTPTLONG'] < -130)][['GEOID', 'NAME', 'USPS', 'INTPTLAT', 'INTPTLONG']]"""
 
     """Here's the output:
           GEOID                               NAME USPS   INTPTLAT   INTPTLONG
@@ -254,6 +255,7 @@ if __name__ == '__main__':
     9334  15009                        Maui County   HI  20.855931 -156.601550
 
     Looks like Aleutians West Census Area is in the Eastern Hemisphere, so I'll have to watch out for that."""
+    """
 
     #I guess I can fix that right now:
     X2001_df = earth_is_round(X2001_df)
@@ -290,7 +292,7 @@ if __name__ == '__main__':
     #Scatter matrix:
     myvars = ['POP_GROWTH_P', 'INTPTLAT', 'INTPTLONG', 'under5_frac', 'under20_frac', 'over65_frac', 'fem_frac', 'logpop', 'logland', 'logwater', 'logpopdens', 'POP_GROWTH_F']
     scatter_matrix(all2001_df[myvars], figsize=(20,20), diagonal = 'kde')
-    plt.savefig('scattermatrix.eps')
+    plt.savefig('scattermatrix.eps')"""
 
     """A few conclusions from this:
     -The logarithmic versions of each of the variables that I logarithmized seem better than the non-log versions.  Correlations w/ the target are better, etc.
@@ -315,8 +317,8 @@ if __name__ == '__main__':
     That correlation is so strong that I think I'll drop under20_frac.
     However, later on, I might add in fractions for every age cohort.
     """
-    newlist = ['GEOID', 'YEAR', 'POP_GROWTH_P', 'INTPTLAT', 'INTPTLONG', 'under5_frac', 'over65_frac', 'fem_frac', 'logpop', 'logland', 'logwater']
-    finalX_2001 = select_cols(X2001_logs_df, newlist)
+    """newlist = ['GEOID', 'YEAR', 'POP_GROWTH_P', 'INTPTLAT', 'INTPTLONG', 'under5_frac', 'over65_frac', 'fem_frac', 'logpop', 'logland', 'logwater']
+    finalX_2001 = select_cols(X2001_logs_df, newlist)"""
 
     #finalX_2001.to_csv('../DATA/X2001_df.csv')
     #y2001.to_csv('../DATA/y2001_df.csv')
