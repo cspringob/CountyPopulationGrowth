@@ -5,6 +5,7 @@ from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GroupKFold
 import matplotlib.pyplot as plt
 import math
 
@@ -13,9 +14,14 @@ def run_regression(model, X, y, alphas):
     grid.fit(X, y)
     return grid
 
-def run_regressionlist(model, X, y, alphas):
+def run_regressionlist(model, X, y, alphas, lincv = 10, clu = np.zeros(5)):
     scoring = {'r2': 'r2', 'neg_mean_squared_error': 'neg_mean_squared_error'}
-    grid = GridSearchCV(estimator = model, param_grid = dict(alpha=alphas), cv = 10, scoring = scoring, refit = 'r2')
+    if(lincv == 'gkf'):
+        group = clu
+        gkf = list(GroupKFold(n_splits=10).split(X, y, group))
+        grid = GridSearchCV(estimator = model, param_grid = dict(alpha=alphas), cv = gkf, scoring = scoring, refit = 'neg_mean_squared_error')
+    else:
+        grid = GridSearchCV(estimator = model, param_grid = dict(alpha=alphas), cv = lincv, scoring = scoring, refit = 'neg_mean_squared_error')
     grid.fit(X, y)
     return grid
 
@@ -24,9 +30,14 @@ def run_forest(model, X, y, parameters):
     grid.fit(X,y)
     return grid
 
-def run_forestlist(model, X, y, parameters):
+def run_forestlist(model, X, y, parameters, forcv = 5, clu = np.zeros(5)):
     scoring = {'r2': 'r2', 'neg_mean_squared_error': 'neg_mean_squared_error'}
-    grid = GridSearchCV(model, parameters, cv = 5, scoring = scoring, refit = 'r2', verbose = 100)
+    if(forcv == 'gkf'):
+        group = clu
+        gkf = list(GroupKFold(n_splits=5).split(X, y, group))
+        grid = GridSearchCV(model, parameters, cv = gkf, scoring = scoring, refit = 'neg_mean_squared_error', verbose = 100)
+    else:
+        grid = GridSearchCV(model, parameters, cv = forcv, scoring = scoring, refit = 'neg_mean_squared_error', verbose = 100)
     grid.fit(X,y)
     return grid
 
@@ -44,8 +55,8 @@ def select_years(df, yearlist):
     dfout = df[df['YEAR'].isin(yearlist)].copy()
     return dfout
 
-def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filename):
-    #Makes blocks of data from yearlists, and runs through lasso, ridge, and random forest on all of them.
+def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5):
+    #Makes blocks of data from yearlists, and runs through lasso, ridge, and random forest on all of them.  Note that if you're doing k-folds by cluster (gkf), then you must have cluster as a column in your Xdf dataframe.
     f1 = open(filename,"w")
     lasso = Lasso()
     ridge = Ridge()
@@ -55,7 +66,6 @@ def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filena
     for_list = []
     for i in range(0,len(yearlists)):
         nextyear = [yearlists[i][-1] + 1]
-        #print(nextyear)
         Xt = select_years(Xdf, yearlists[i])
         yt = select_years(ydf, yearlists[i])
         Xt2 = select_years(Xdf, nextyear)
@@ -63,13 +73,19 @@ def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filena
         X = Xt[featurelist]
         y = yt['POP_GROWTH_F1']
         Xtest = Xt2[featurelist]
+        clu = np.zeros(len(X))
+        if('cluster' in list(Xtest)):
+            Xtest = Xtest.drop(['cluster'], axis = 1)
+            clu = X['cluster'].values
+            X = X.drop(['cluster'], axis = 1)
+            #print(clu)
         ytest = yt2['POP_GROWTH_F1']
         scaler = StandardScaler()
         Xscale = scaler.fit_transform(X)
         Xscaletest = scaler.transform(Xtest)
-        las_list.append(run_regressionlist(lasso, Xscale, y, alphas))
-        rid_list.append(run_regressionlist(ridge, Xscale, y, alphas))
-        for_list.append(run_forestlist(forest, Xscale, y, forest_par))
+        las_list.append(run_regressionlist(lasso, Xscale, y, alphas, lincv = lincv, clu = clu))
+        rid_list.append(run_regressionlist(ridge, Xscale, y, alphas, lincv = lincv, clu = clu))
+        for_list.append(run_forestlist(forest, Xscale, y, forest_par, forcv = forcv, clu = clu))
         mymean = np.mean(ytest.values)
         myrms = np.mean(ytest.values * ytest.values)
         laspredict = las_list[i].predict(Xscaletest)
@@ -81,15 +97,15 @@ def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filena
         forpredict = for_list[i].predict(Xscaletest)
         foroffset = np.mean(ytest.values - forpredict)
         forrms = np.mean((ytest.values - forpredict) * (ytest.values - forpredict))
-        print(nextyear[0], len(yearlists[i]), las_list[i].best_score_, las_list[i].cv_results_['mean_test_neg_mean_squared_error'][las_list[i].best_index_], rid_list[i].best_score_, rid_list[i].cv_results_['mean_test_neg_mean_squared_error'][rid_list[i].best_index_], for_list[i].best_score_, for_list[i].cv_results_['mean_test_neg_mean_squared_error'][for_list[i].best_index_], lasoffset, lasrms, ridoffset, ridrms, foroffset, forrms, mymean, myrms, file = f1)
-        print(nextyear[0], len(yearlists[i]), las_list[i].best_score_, las_list[i].cv_results_['mean_test_neg_mean_squared_error'][las_list[i].best_index_], rid_list[i].best_score_, rid_list[i].cv_results_['mean_test_neg_mean_squared_error'][rid_list[i].best_index_], for_list[i].best_score_, for_list[i].cv_results_['mean_test_neg_mean_squared_error'][for_list[i].best_index_], lasoffset, lasrms, ridoffset, ridrms, foroffset, forrms, mymean, myrms)
+        print(nextyear[0], len(yearlists[i]),  las_list[i].cv_results_['r2'][las_list[i].best_index_], las_list[i].best_score_,  rid_list[i].cv_results_['r2'][rid_list[i].best_index_], rid_list[i].best_score_,  for_list[i].cv_results_['r2'][for_list[i].best_index_], for_list[i].best_score_, lasoffset, lasrms, ridoffset, ridrms, foroffset, forrms, mymean, myrms, file = f1)
+        print(nextyear[0], len(yearlists[i]), las_list[i].cv_results_['r2'][las_list[i].best_index_], las_list[i].best_score_,  rid_list[i].cv_results_['r2'][rid_list[i].best_index_], rid_list[i].best_score_,  for_list[i].cv_results_['r2'][for_list[i].best_index_], for_list[i].best_score_,  lasoffset, lasrms, ridoffset, ridrms, foroffset, forrms, mymean, myrms)
     las_list.append(yearlists)
     rid_list.append(yearlists)
     for_list.append(yearlists)
     f1.close()
     return las_list, rid_list, for_list
 
-def loopyears(Xdf, ydf, year, start, stop, featurelist, alphas, forest_par, filename):
+def loopyears(Xdf, ydf, year, start, stop, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5):
     # Uses loop_gridsearch to predict the population growth for a given year, using models trained on on the years "year-start" to "year-stop".
     listlists = []
     for i in range(start, stop+1):
@@ -97,8 +113,19 @@ def loopyears(Xdf, ydf, year, start, stop, featurelist, alphas, forest_par, file
         for j in range(0, i):
             yearlist.append(year - (i - j))
         listlists.append(yearlist)
-    laslist, ridlist, forlist = loop_gridsearch(Xdf, ydf, listlists, featurelist, alphas, forest_par, filename)
+    laslist, ridlist, forlist = loop_gridsearch(Xdf, ydf, listlists, featurelist, alphas, forest_par, filename, lincv = lincv, forcv = forcv)
     return laslist, ridlist, forlist
+
+def pick_splits(Xdf, ydf, testlist):
+    #Removes any splits that are listed in "testlist", because those will be used for test data:
+    Xdf2 = Xdf.copy()
+    ydf2 = ydf.copy()
+    Xdf3 = Xdf2[~Xdf2['split'].isin(testlist)]
+    ydf3 = ydf2[~Xdf2['split'].isin(testlist)]
+    Xtest = Xdf2[Xdf2['split'].isin(testlist)]
+    ytest = ydf2[Xdf2['split'].isin(testlist)]
+    return Xdf3, ydf3, Xtest, ytest
+
 
 if __name__ == '__main__':
     #Here's my trial with just the 2001 data:
@@ -262,3 +289,48 @@ if __name__ == '__main__':
     ypred = for_mvp2012[0].best_estimator_.predict(Xscaletest)
     plt.scatter(ytest.values, ypred)
     plt.savefig('2012predvsactual.eps')
+
+    ################
+    ###### Cluster Section
+    ################
+    #Read in cluster data:
+    """Xdf = pd.read_csv('../DATA/X2000s_nout_clu.csv')
+    ydf = pd.read_csv('../DATA/y2000s_nout_clu.csv')
+    #
+    #Split off the test data:
+    testlist = [0]
+    Xtrain, ytrain, Xtest, ytest = pick_splits(Xdf, ydf, testlist)
+    #Select features:
+    featurelist = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'logpop_clu', 'logland_clu', 'pop_growth_clu1', 'pop_growth_clu2']
+    alphas = list(np.logspace(-6, 6, num = 20))
+    forest_params = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    las_mvp2012clu, rid_mvp2012clu, for_mvp2012clu = runmodel.loopyears(Xtrain, ytrain, 2012, 10, 10, featurelist, alphas, forest_params, 'mvpyear2012cluster.txt')
+
+    # Here's a test of gkf:
+    forest_paramstest = {'n_estimators':[50], 'max_features':[0.5], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    las_mvp2012test2, rid_mvp2012test2, for_mvp2012test2 = runmodel.loopyears(Xtrain, ytrain, 2012, 2, 2, featurelist, alphas, forest_paramstest, 'mvpyear2012test2.txt')
+
+    featurelist = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'logpop_clu', 'logland_clu', 'pop_growth_clu1', 'pop_growth_clu2', 'cluster']
+    las_mvp2012club, rid_mvp2012club, for_mvp2012club = loopyears(Xtrain, ytrain, 2012, 10, 10, featurelist, alphas, forest_params, 'mvpyear2012clusterb.txt', lincv = 'gkf', forcv = 'gkf')
+
+    #Redo of the cluster section, with new features:
+    featurelist = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'logpop_clu', 'logland_clu', 'pop_growth_clu1', 'pop_growth_clu2',  'growthweight1', 'growthweight2', 'popweight', 'denseweight', 'cluster']
+    alphas = list(np.logspace(-6, 6, num = 20))
+    forest_params = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    las_mvp2012test, rid_mvp2012test, for_mvp2012test = runmodel.loopyears(Xtrain, ytrain, 2012, 10, 10, featurelist, alphas, forest_params, 'mvpyear2012clustertest.txt', lincv = 'gkf', forcv = 'gkf')"""
+
+    #################################################
+    #Trying again with cluster analysis, new features:
+    #################################################
+    Xdf = pd.read_csv('../DATA/X2000s_nout_clug.csv')
+    ydf = pd.read_csv('../DATA/y2000s_nout_clug.csv')
+    #
+    #Split off the test data:
+    testlist = [0]
+    Xtrain, ytrain, Xtest, ytest = pick_splits(Xdf, ydf, testlist)
+    Xtrain, ytrain, Xtest, ytest = pick_splits(Xdf, ydf, testlist)
+    #Select features:
+    featurelist = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'growthweight120', 'growthweight220', 'growthweight320', 'growthweight420', 'growthweight520', 'popweight20', 'denseweight20', 'growthweight150', 'growthweight250', 'growthweight350', 'growthweight450', 'growthweight550', 'popweight50', 'denseweight50', 'growthweight1100', 'growthweight2100', 'growthweight3100', 'growthweight4100', 'growthweight5100', 'popweight100', 'denseweight100', 'growthweight1200', 'growthweight2200', 'growthweight3200', 'growthweight4200', 'growthweight5200', 'popweight200', 'denseweight200', 'cluster']
+    alphas = list(np.logspace(-6, 6, num = 20))
+    forest_params = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    las_mvp2012clug, rid_mvp2012clug, for_mvp2012clug = runmodel.loopyears(Xtrain, ytrain, 2012, 2, 2, featurelist, alphas, forest_params, 'mvpyear2012clugaus.txt', lincv = 'gkf', forcv = 'gkf')
