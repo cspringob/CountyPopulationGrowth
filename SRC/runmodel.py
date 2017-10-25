@@ -8,6 +8,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GroupKFold
 import matplotlib.pyplot as plt
 import math
+from math import sqrt
 
 def run_regression(model, X, y, alphas):
     grid = GridSearchCV(estimator = model, param_grid = dict(alpha=alphas), cv = 10)
@@ -55,7 +56,7 @@ def select_years(df, yearlist):
     dfout = df[df['YEAR'].isin(yearlist)].copy()
     return dfout
 
-def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5):
+def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5, gap = 1, testsplit = -1):
     #Makes blocks of data from yearlists, and runs through lasso, ridge, and random forest on all of them.  Note that if you're doing k-folds by cluster (gkf), then you must have cluster as a column in your Xdf dataframe.
     f1 = open(filename,"w")
     lasso = Lasso()
@@ -64,12 +65,25 @@ def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filena
     las_list = []
     rid_list = []
     for_list = []
+    mses = []
+    offsets = []
     for i in range(0,len(yearlists)):
-        nextyear = [yearlists[i][-1] + 1]
-        Xt = select_years(Xdf, yearlists[i])
-        yt = select_years(ydf, yearlists[i])
-        Xt2 = select_years(Xdf, nextyear)
-        yt2 = select_years(ydf, nextyear)
+        nextyear = [yearlists[i][-1] + gap]
+        Xtrainreal = Xdf.copy()
+        Xtestreal = Xdf.copy()
+        ytrainreal = ydf.copy()
+        ytestreal = ydf.copy()
+        if(testsplit > -1):
+            Xtrainreal, ytrainreal, Xtestreal, ytestreal = pick_splits(Xdf, ydf, [testsplit])
+        #print(len(Xtrainreal), len(ytrainreal))
+        #Xt = select_years(Xdf, yearlists[i])
+        #yt = select_years(ydf, yearlists[i])
+        #Xt2 = select_years(Xdf, nextyear)
+        #yt2 = select_years(ydf, nextyear)
+        Xt = select_years(Xtrainreal, yearlists[i])
+        yt = select_years(ytrainreal, yearlists[i])
+        Xt2 = select_years(Xtestreal, nextyear)
+        yt2 = select_years(ytestreal, nextyear)
         X = Xt[featurelist]
         y = yt['POP_GROWTH_F1']
         Xtest = Xt2[featurelist]
@@ -83,6 +97,11 @@ def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filena
         scaler = StandardScaler()
         Xscale = scaler.fit_transform(X)
         Xscaletest = scaler.transform(Xtest)
+
+        #print(len(Xscale), len(y), len(Xtest), len(ytest), len(Xdf), len(ydf))
+        #print(len(Xtrainreal), len(ytrainreal), len(X), len(y))
+
+
         las_list.append(run_regressionlist(lasso, Xscale, y, alphas, lincv = lincv, clu = clu))
         rid_list.append(run_regressionlist(ridge, Xscale, y, alphas, lincv = lincv, clu = clu))
         for_list.append(run_forestlist(forest, Xscale, y, forest_par, forcv = forcv, clu = clu))
@@ -97,13 +116,16 @@ def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filena
         forpredict = for_list[i].predict(Xscaletest)
         foroffset = np.mean(ytest.values - forpredict)
         forrms = np.mean((ytest.values - forpredict) * (ytest.values - forpredict))
-        print(nextyear[0], len(yearlists[i]),  las_list[i].cv_results_['r2'][las_list[i].best_index_], las_list[i].best_score_,  rid_list[i].cv_results_['r2'][rid_list[i].best_index_], rid_list[i].best_score_,  for_list[i].cv_results_['r2'][for_list[i].best_index_], for_list[i].best_score_, lasoffset, lasrms, ridoffset, ridrms, foroffset, forrms, mymean, myrms, file = f1)
-        print(nextyear[0], len(yearlists[i]), las_list[i].cv_results_['r2'][las_list[i].best_index_], las_list[i].best_score_,  rid_list[i].cv_results_['r2'][rid_list[i].best_index_], rid_list[i].best_score_,  for_list[i].cv_results_['r2'][for_list[i].best_index_], for_list[i].best_score_,  lasoffset, lasrms, ridoffset, ridrms, foroffset, forrms, mymean, myrms)
+        print(nextyear[0], len(yearlists[i]),  las_list[i].cv_results_['mean_test_r2'][las_list[i].best_index_], las_list[i].best_score_,  rid_list[i].cv_results_['mean_test_r2'][rid_list[i].best_index_], rid_list[i].best_score_,  for_list[i].cv_results_['mean_test_r2'][for_list[i].best_index_], for_list[i].best_score_, lasoffset, lasrms, ridoffset, ridrms, foroffset, forrms, mymean, myrms, file = f1)
+        print(nextyear[0], len(yearlists[i]), las_list[i].cv_results_['mean_test_r2'][las_list[i].best_index_], las_list[i].best_score_,  rid_list[i].cv_results_['mean_test_r2'][rid_list[i].best_index_], rid_list[i].best_score_,  for_list[i].cv_results_['mean_test_r2'][for_list[i].best_index_], for_list[i].best_score_, lasoffset, lasrms, ridoffset, ridrms, foroffset, forrms, mymean, myrms)
+        mses.append((lasrms, ridrms, forrms))
+        offsets.append((lasoffset, ridoffset, foroffset))
     las_list.append(yearlists)
     rid_list.append(yearlists)
     for_list.append(yearlists)
     f1.close()
-    return las_list, rid_list, for_list
+    #Note that I've now changed this so that it returns 5 arguments:
+    return las_list, rid_list, for_list, mses, offsets
 
 def loopyears(Xdf, ydf, year, start, stop, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5):
     # Uses loop_gridsearch to predict the population growth for a given year, using models trained on on the years "year-start" to "year-stop".
@@ -116,14 +138,41 @@ def loopyears(Xdf, ydf, year, start, stop, featurelist, alphas, forest_par, file
     laslist, ridlist, forlist = loop_gridsearch(Xdf, ydf, listlists, featurelist, alphas, forest_par, filename, lincv = lincv, forcv = forcv)
     return laslist, ridlist, forlist
 
+def loopyears_time(Xdf, ydf, depyear1, numyears, listyears, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5):
+    #Similar to loopyears, but this calculates rmse for a range of "deployment years" for time splits over a fixed number of training years.  E.g., fit separately for deployment in years 2009, 2010, 2011, and 2012.  For 2009, your training data might be the years 2002-2005.  For 2010, they'd be 2003-2006, etc.  Then you average the deployment rmses for each year.
+    listlists = []
+    for i in range(0, numyears):
+        yearlist = []
+        thisyear = depyear1 + i
+        for j in range(0, len(listyears)):
+            yearlist.append(thisyear + listyears[j])
+        listlists.append(yearlist)
+    splitlist = [1, 2, 3, 4, 5]
+    #splitlist = [1, 2]
+    mselist = []
+    offsetlist = []
+    for i in range(0, len(splitlist)):
+        laslist, ridlist, forlist, mses, offsets = loop_gridsearch(Xdf, ydf, listlists, featurelist, alphas, forest_par, ''.join([str(splitlist[i]), filename]), lincv = lincv, forcv = forcv, gap = -1 * listyears[-1], testsplit = splitlist[i])
+        mselist.append(mses)
+        offsetlist.append(offsets)
+    flatmselist = [item for sublist in mselist for item in sublist]
+    rmsearr = np.zeros(len(flatmselist))
+    for i in range(0,len(flatmselist)):
+        rmsearr[i] = sqrt(min(flatmselist[i]))
+    print(flatmselist, offsetlist, rmsearr)
+    print(np.mean(rmsearr))
+    return laslist, ridlist, forlist, mses, offsets, rmsearr
+
+
 def pick_splits(Xdf, ydf, testlist):
     #Removes any splits that are listed in "testlist", because those will be used for test data:
     Xdf2 = Xdf.copy()
     ydf2 = ydf.copy()
-    Xdf3 = Xdf2[~Xdf2['split'].isin(testlist)]
-    ydf3 = ydf2[~Xdf2['split'].isin(testlist)]
-    Xtest = Xdf2[Xdf2['split'].isin(testlist)]
-    ytest = ydf2[Xdf2['split'].isin(testlist)]
+    Xdf3 = Xdf2[~Xdf2['split'].isin(testlist)].copy()
+    ydf3 = ydf2[~Xdf2['split'].isin(testlist)].copy()
+    Xtest = Xdf2[Xdf2['split'].isin(testlist)].copy()
+    ytest = ydf2[Xdf2['split'].isin(testlist)].copy()
+    #print(5, len(Xdf3), len(ydf3), len(Xtest), len(ytest))
     return Xdf3, ydf3, Xtest, ytest
 
 
@@ -331,6 +380,23 @@ if __name__ == '__main__':
     Xtrain, ytrain, Xtest, ytest = pick_splits(Xdf, ydf, testlist)
     #Select features:
     featurelist = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'growthweight120', 'growthweight220', 'growthweight320', 'growthweight420', 'growthweight520', 'popweight20', 'denseweight20', 'growthweight150', 'growthweight250', 'growthweight350', 'growthweight450', 'growthweight550', 'popweight50', 'denseweight50', 'growthweight1100', 'growthweight2100', 'growthweight3100', 'growthweight4100', 'growthweight5100', 'popweight100', 'denseweight100', 'growthweight1200', 'growthweight2200', 'growthweight3200', 'growthweight4200', 'growthweight5200', 'popweight200', 'denseweight200', 'cluster']
+    featuretemp = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'cluster']
     alphas = list(np.logspace(-6, 6, num = 20))
-    forest_params = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
-    las_mvp2012clug, rid_mvp2012clug, for_mvp2012clug = runmodel.loopyears(Xtrain, ytrain, 2012, 2, 2, featurelist, alphas, forest_params, 'mvpyear2012clugaus.txt', lincv = 'gkf', forcv = 'gkf')
+    forest_params = {'n_estimators':[50], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[5], 'n_jobs':[-1]}
+    #forest_paramstest = {'n_estimators':[100], 'max_features':[0.5], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    las_mvp2012clug, rid_mvp2012clug, for_mvp2012clug = loopyears(Xtrain, ytrain, 2012, 10, 10, featurelist, alphas, forest_params, 'mvpyear2012clugaus.txt', lincv = 'gkf', forcv = 'gkf')
+    # mse = -1.85483172154e-05 (random forest)
+    # Try it without any of the environmental parameters:
+    las_mvp2012clug5, rid_mvp2012clug5, for_mvp2012clug5 = loopyears(Xtrain, ytrain, 2012, 10, 10, featuretemp, alphas, forest_params, 'mvpyear2012clugaust.txt', lincv = 'gkf', forcv = 'gkf')
+    # Without the environmental parameters, mse = -1.89042296212e-05
+    # Try a very dumb model with only pop growth of past two years:
+    featuretemp2 = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'cluster']
+    las_mvp2012clugc, rid_mvp2012clugc, for_mvp2012clugc = loopyears(Xtrain, ytrain, 2012, 10, 10, featuretemp2, alphas, forest_params, 'mvpyear2012clugausc.txt', lincv = 'gkf', forcv = 'gkf')
+    #mse = -2.09819277391e-05
+    #The environmental parameters help a little, but not by much.
+
+    #OK now I've added loopyears_time, and am going to test it out:
+    featuretemp2 = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac']
+    las_test, rid_test, for_test, mses, offsets, rmsearr = loopyears_time(Xtrain, ytrain, 2009, 2, [-4, -3], featuretemp2, alphas, forest_params, 'testfile.txt')
+
+    #OK, that seemed to work.  Now I'll try fitting four year data (right after I commit).
