@@ -56,7 +56,7 @@ def select_years(df, yearlist):
     dfout = df[df['YEAR'].isin(yearlist)].copy()
     return dfout
 
-def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5, gap = 1, testsplit = -1):
+def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5, gap = 1, testsplit = -1, space = False):
     #Makes blocks of data from yearlists, and runs through lasso, ridge, and random forest on all of them.  Note that if you're doing k-folds by cluster (gkf), then you must have cluster as a column in your Xdf dataframe.
     f1 = open(filename,"w")
     lasso = Lasso()
@@ -74,7 +74,10 @@ def loop_gridsearch(Xdf, ydf, yearlists, featurelist, alphas, forest_par, filena
         ytrainreal = ydf.copy()
         ytestreal = ydf.copy()
         if(testsplit > -1):
-            Xtrainreal, ytrainreal, Xtestreal, ytestreal = pick_splits(Xdf, ydf, [testsplit])
+            Xtraining, ytraining, Xtestreal, ytestreal = pick_splits(Xdf, ydf, [testsplit])
+        if(space == True):
+            Xtrainreal = Xtraining
+            ytrainreal = ytraining
         #print(len(Xtrainreal), len(ytrainreal))
         #Xt = select_years(Xdf, yearlists[i])
         #yt = select_years(ydf, yearlists[i])
@@ -138,7 +141,7 @@ def loopyears(Xdf, ydf, year, start, stop, featurelist, alphas, forest_par, file
     laslist, ridlist, forlist = loop_gridsearch(Xdf, ydf, listlists, featurelist, alphas, forest_par, filename, lincv = lincv, forcv = forcv)
     return laslist, ridlist, forlist
 
-def loopyears_time(Xdf, ydf, depyear1, numyears, listyears, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5):
+def loopyears_time(Xdf, ydf, depyear1, numyears, listyears, featurelist, alphas, forest_par, filename, lincv = 10, forcv = 5, space = False):
     #Similar to loopyears, but this calculates rmse for a range of "deployment years" for time splits over a fixed number of training years.  E.g., fit separately for deployment in years 2009, 2010, 2011, and 2012.  For 2009, your training data might be the years 2002-2005.  For 2010, they'd be 2003-2006, etc.  Then you average the deployment rmses for each year.
     listlists = []
     for i in range(0, numyears):
@@ -152,7 +155,7 @@ def loopyears_time(Xdf, ydf, depyear1, numyears, listyears, featurelist, alphas,
     mselist = []
     offsetlist = []
     for i in range(0, len(splitlist)):
-        laslist, ridlist, forlist, mses, offsets = loop_gridsearch(Xdf, ydf, listlists, featurelist, alphas, forest_par, ''.join([str(splitlist[i]), filename]), lincv = lincv, forcv = forcv, gap = -1 * listyears[-1], testsplit = splitlist[i])
+        laslist, ridlist, forlist, mses, offsets = loop_gridsearch(Xdf, ydf, listlists, featurelist, alphas, forest_par, ''.join([str(splitlist[i]), filename]), lincv = lincv, forcv = forcv, gap = -1 * listyears[-1], testsplit = splitlist[i], space = space)
         mselist.append(mses)
         offsetlist.append(offsets)
     flatmselist = [item for sublist in mselist for item in sublist]
@@ -174,7 +177,6 @@ def pick_splits(Xdf, ydf, testlist):
     ytest = ydf2[Xdf2['split'].isin(testlist)].copy()
     #print(5, len(Xdf3), len(ydf3), len(Xtest), len(ytest))
     return Xdf3, ydf3, Xtest, ytest
-
 
 if __name__ == '__main__':
     #Here's my trial with just the 2001 data:
@@ -216,8 +218,8 @@ if __name__ == '__main__':
     plt.savefig('ridge_alpha.eps')"""
 
     #Now I'll try running fits on the 2000-2009 data:
-    Xdf = pd.read_csv('../DATA/X2000s_nout.csv')
-    ydf = pd.read_csv('../DATA/y2000s_nout.csv')
+    #Xdf = pd.read_csv('../DATA/X2000s_nout.csv')
+    #ydf = pd.read_csv('../DATA/y2000s_nout.csv')
     #Initially, we'll only look at 2005-2009:
     """yearlist = [2005, 2006, 2007, 2008, 2009]
     Xt = select_years(Xdf, yearlist)
@@ -301,11 +303,11 @@ if __name__ == '__main__':
 
     #Here's my code for MVP:
     #Predict 2012 - 2013 population growth using model trained on the previous 5 years:
-    forest_params2 = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    """forest_params2 = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
     las_mvp2012, rid_mvp2012, for_mvp2012 = loopyears(Xdf, ydf, 2012, 10, 10, featurelist, alphas, forest_params2, 'mvpyear2012.txt')
 
     #Here are some stats on the random forest fit:
-    print(for_mvp2012[0].best_score_, for_mvp2012[0].best_params_, for_mvp2012[0].best_estimator_.feature_importances_)
+    print(for_mvp2012[0].best_score_, for_mvp2012[0].best_params_, for_mvp2012[0].best_estimator_.feature_importances_)"""
     """Outputs this:
     0.464784618544 {'n_estimators': 200, 'max_features': 0.5, 'n_jobs': -1, 'min_samples_leaf': 5} [ 0.20200158  0.35152289  0.01643884  0.01576634  0.014535    0.0124183
     0.01350719  0.01417823  0.01462276  0.01889867  0.01645419  0.0160191
@@ -314,7 +316,7 @@ if __name__ == '__main__':
     0.01266728  0.02261034]"""
 
     #And from the Lasso fit:
-    print(las_mvp2012[0].best_score_, las_mvp2012[0].best_params_, las_mvp2012[0].best_estimator_.coef_)
+    #print(las_mvp2012[0].best_score_, las_mvp2012[0].best_params_, las_mvp2012[0].best_estimator_.coef_)
     """0.428498139944 {'alpha': 4.2813323987193961e-06} [  6.79233757e-04   2.89897621e-03  -3.65415817e-05  -2.95148346e-04
    2.66427313e-04  -1.46531893e-04  -1.45809806e-04  -1.16365957e-04
    1.71028896e-04  -3.30219529e-04   1.25247711e-04   1.63371812e-04
@@ -324,7 +326,7 @@ if __name__ == '__main__':
    5.85477692e-06   1.63103497e-04]"""
 
     #Let's plot model predictions vs. actual growth:
-    Xt = select_years(Xdf, [2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011])
+    """Xt = select_years(Xdf, [2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011])
     yt = select_years(ydf, [2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011])
     Xt2 = select_years(Xdf, [2012])
     yt2 = select_years(ydf, [2012])
@@ -337,7 +339,7 @@ if __name__ == '__main__':
     Xscaletest = scaler.transform(Xtest)
     ypred = for_mvp2012[0].best_estimator_.predict(Xscaletest)
     plt.scatter(ytest.values, ypred)
-    plt.savefig('2012predvsactual.eps')
+    plt.savefig('2012predvsactual.eps')"""
 
     ################
     ###### Cluster Section
@@ -400,3 +402,51 @@ if __name__ == '__main__':
     las_test, rid_test, for_test, mses, offsets, rmsearr = loopyears_time(Xtrain, ytrain, 2009, 2, [-4, -3], featuretemp2, alphas, forest_params, 'testfile.txt')
 
     #OK, that seemed to work.  Now I'll try fitting four year data (right after I commit).
+    featuretime = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac']
+    forest_params = {'n_estimators':[100], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[5], 'n_jobs':[-1]}
+    las_4year, rid_4year, for_4year, mse4, offset4, rmsearr4 = loopyears_time(Xtrain, ytrain, 2009, 4, [-7, -6, -5, -4], featuretime, alphas, forest_params, '_4yearfile.txt')
+    #Result is 0.0046149641105588113
+
+    #And then yere is is 3 years:
+    las_3year, rid_3year, for_3year, mse3, offset3, rmsearr3 = loopyears_time(Xtrain, ytrain, 2009, 4, [-6, -5, -4], featuretime, alphas, forest_params, '_3yearfile.txt')
+    #Result is 0.00463592608369
+
+    #Here is 2 years:
+    las_2year, rid_2year, for_2year, mse2, offset2, rmsearr2 = loopyears_time(Xtrain, ytrain, 2009, 4, [-5, -4], featuretime, alphas, forest_params, '_2yearfile.txt')
+    #Result is 0.0046456275339
+
+    #Here is 1 year:
+    las_1year, rid_1year, for_1year, mse1, offset1, rmsearr1 = loopyears_time(Xtrain, ytrain, 2009, 4, [-4], featuretime, alphas, forest_params, '_1yearfile.txt')
+    #Result is 0.00460483626665
+
+    #Need to copy over the updated version of loopyears_time from scratchpaper.py, and put it in this file.
+    #Now, move on to splitting in space.....I'll try 4 years first:
+    featurespace = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'growthweight120', 'growthweight220',  'popweight20', 'denseweight20', 'growthweight150', 'growthweight250', 'popweight50', 'denseweight50', 'growthweight1100', 'growthweight2100',  'popweight100', 'denseweight100', 'growthweight1200', 'growthweight2200',  'popweight200', 'denseweight200', 'cluster']
+    las_4year_s, rid_4year_s, for_4year_s, mse4_s, offset4_s, rmsearr4_s = loopyears_time(Xtrain, ytrain, 2009, 4, [-4, -3, -2, -1], featurespace, alphas, forest_params, '_4yearfile_s.txt', lincv = 'gkf', forcv = 'gkf', space = True)
+    #Result is 0.00430727235407
+    #0.00432388284704
+
+    #And now 5 years:
+    las_5year_s, rid_5year_s, for_5year_s, mse5_s, offset5_s, rmsearr5_s = loopyears_time(Xtrain, ytrain, 2009, 4, [-5, -4, -3, -2, -1], featurespace, alphas, forest_params, '_5yearfile_s.txt', lincv = 'gkf', forcv = 'gkf', space = True)
+    #Result is .0043064221433
+    #0.0043314548059
+
+    #And now 6 years:
+    las_6year_s, rid_6year_s, for_6year_s, mse6_s, offset6_s, rmsearr6_s = loopyears_time(Xtrain, ytrain, 2009, 4, [-6, -5, -4, -3, -2, -1], featurespace, alphas, forest_params, '_6yearfile_s.txt', lincv = 'gkf', forcv = 'gkf', space = True)
+    #Result is 0.00429129096824
+    #0.00432316291375
+
+    #And now 7 years:
+    las_7year_s, rid_7year_s, for_7year_s, mse7_s, offset7_s, rmsearr7_s = loopyears_time(Xtrain, ytrain, 2009, 4, [-7, -6, -5, -4, -3, -2, -1], featurespace, alphas, forest_params, '_7yearfile_s.txt', lincv = 'gkf', forcv = 'gkf', space = True)
+    #Result is 0.00430329781024
+
+    #Here's a test of doing group k-folds even when train/test split is done in time:
+    featuretimegroup = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'cluster']
+    #Here is 1 year:
+    las_1yeargroup, rid_1yeargroup, for_1yeargroup, mse1group, offset1group, rmsearr1group = loopyears_time(Xtrain, ytrain, 2009, 4, [-4], featuretimegroup, alphas, forest_params, '_1yearfilegroup.txt', lincv = 'gkf', forcv = 'gkf')
+    #Answer is 0.00463037088313.  So, slightly worse than not doing the group k-fold, and fitting everything else the same.
+
+    #Now try fitting in space, but without the environmental parameters:
+    #6 years:
+    las_6year_sno, rid_6year_sno, for_6year_sno, mse6_sno, offset6_sno, rmsearr6_sno = loopyears_time(Xtrain, ytrain, 2009, 4, [-6, -5, -4, -3, -2, -1], featuretimegroup, alphas, forest_params, '_6yearfile_sno.txt', lincv = 'gkf', forcv = 'gkf', space = True)
+    #Result is 0.00442128324521
