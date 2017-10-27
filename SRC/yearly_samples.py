@@ -32,7 +32,7 @@ def select_cols(df, collist):
     dfout = df[collist].copy()
     return dfout
 
-def kill_outliers(X, y):
+def kill_outliers(X, y, fiveyear = False):
     #Identifies outliers, and removes them from the dataframes:
     outlierlist = []
     cols = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'POP_GROWTH_P3', 'POP_GROWTH_P4', 'POP_GROWTH_P5']
@@ -43,6 +43,8 @@ def kill_outliers(X, y):
             if(abs(X[cols[i]][index] - mymean) > (5.0 * mystd)):
                 outlierlist.append(index)
     coly = 'POP_GROWTH_F1'
+    if(fiveyear == True):
+        coly = 'POP_GROWTH_F5'
     mymean = y[coly].mean(axis = 0)
     mystd = y[coly].std(axis = 0)
     for index in y[coly].index:
@@ -54,7 +56,7 @@ def kill_outliers(X, y):
     return Xout, yout, setlist
 
 def find_outliers(X):
-    #Same as kill outliers, except it only identifies the outliers and puts them in a list, rather than eliminate them.  The list is a list of tubles, which tells us which of the features it's an outlier on.
+    #Same as kill outliers, except it only identifies the outliers and puts them in a list, rather than eliminate them.  The list is a list of tuples, which tells us which of the features it's an outlier on.
     outlierlist = []
     cols = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'POP_GROWTH_P3', 'POP_GROWTH_P4', 'POP_GROWTH_P5']
     for i in range(0, len(cols)):
@@ -65,7 +67,7 @@ def find_outliers(X):
                 outlierlist.append((index, i))
     return outlierlist
 
-def kill_more_outliers(X, y, cols):
+def kill_more_outliers(X, y, cols, fiveyear = False):
     #Identifies outliers, and removes them from the dataframes.  This works the same as "kill_outliers", except that rather than using a fixed list of columns, it accepts user input.
     outlierlist = []
     for i in range(0, len(cols)):
@@ -75,6 +77,8 @@ def kill_more_outliers(X, y, cols):
             if(abs(X[cols[i]][index] - mymean) > (5.0 * mystd)):
                 outlierlist.append(index)
     coly = 'POP_GROWTH_F1'
+    if(fiveyear == True):
+        coly = 'POP_GROWTH_F5'
     mymean = y[coly].mean(axis = 0)
     mystd = y[coly].std(axis = 0)
     for index in y[coly].index:
@@ -199,13 +203,27 @@ def vary_sigma(df, outlist = [(0, 10)]):
     df20.to_csv('../DATA/dfclu_200b.csv')
     return df20
 
+def add_dumb_resid(dfx, dfy, targetnum):
+    #Adds a column to the dfy dataframe that gives the "dumb residual".  What would the residual be if you used the past year's population growth and assumed it was the same as the coming year's population growth.  Does the same for 5 year forecast, both by using last 5 years number and by using last year's number multiplied by 5:
+    newy = dfy.copy()
+    if(targetnum == 1):
+        newy['resid_dumb1'] = newy['POP_GROWTH_F1'] - dfx['POP_GROWTH_P1']
+    if(targetnum == 5):
+        newy['resid_dumb1t5'] = newy['POP_GROWTH_F5'] - (5.0 * dfx['POP_GROWTH_P1'])
+        newy['resid_dumb5'] = newy['POP_GROWTH_F5'] - dfx['POP_GROWTH_P5']
+    return newy
+
 if __name__ == '__main__':
     #Read in data, and create the features:
     df = pd.read_csv('../DATA/allsplits.csv')
     #If you don't want the cluster data, then just do this instead:
     #df = pd.read_csv('../DATA/year_rawfeature.csv')
     #and then for the "feature_engineer" step, change the name to df_feature
-    dfy = pd.read_csv('../DATA/y1_df.csv')
+    dfyt = pd.read_csv('../DATA/y1_df.csv')
+    dfy5t = pd.read_csv('../DATA/y5_df.csv')
+
+    dfy = add_dumb_resid(df, dfyt, 1)
+    dfy5 = add_dumb_resid(df, dfy5t, 5)
 
     df_feat = feature_engineer(df)
 
@@ -286,10 +304,11 @@ if __name__ == '__main__':
     ################
     #Redoing the cluster section, to incorporate the Gaussian smoothing of space around the counties....
     #Now select the years to look at:
-    myyears = [2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014]
+    myyears = [2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016]
     #2015-16 is provisionally going to be "test data, that I'm not going to look at."
     X2000s = select_years(df_feature, myyears)
     y2000s = select_years(dfy, myyears)
+    y2000s5 = select_years(dfy5, myyears)
     #Now select the columns:
     mylist = ['GEOID', 'YEAR', 'POP_GROWTH_P1', 'POP_GROWTH_P2', 'POP_GROWTH_P3', 'POP_GROWTH_P4', 'POP_GROWTH_P5', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'logpop_clu', 'logland_clu', 'pop_growth_clu1', 'pop_growth_clu2', 'growthweight120', 'growthweight220', 'growthweight320', 'growthweight420', 'growthweight520', 'popweight20', 'denseweight20', 'growthweight150', 'growthweight250', 'growthweight350', 'growthweight450', 'growthweight550', 'popweight50', 'denseweight50', 'growthweight1100', 'growthweight2100', 'growthweight3100', 'growthweight4100', 'growthweight5100', 'popweight100', 'denseweight100', 'growthweight1200', 'growthweight2200', 'growthweight3200', 'growthweight4200', 'growthweight5200', 'popweight200', 'denseweight200', 'cluster', 'split']
     X2000s_df = select_cols(X2000s, mylist)
@@ -307,6 +326,9 @@ if __name__ == '__main__':
     X2000s2_df = select_cols(X2000s, newlist)
     outcols = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'POP_GROWTH_P3', 'POP_GROWTH_P4', 'POP_GROWTH_P5']
     X2000s_nout, y2000s_nout, setlist = kill_more_outliers(X2000s2_df, y2000s, outcols)
+    X2000s_nout5, y2000s_nout5, setlist = kill_more_outliers(X2000s2_df, y2000s5, outcols, fiveyear = True)
     #After some trial and error, just going to go with killing outliers on those five columns.  I've edited engineer_clusters so that it can better deal with outliers in the smoothing, so it should be OK.
     X2000s_nout.to_csv('../DATA/X2000s_nout_clug.csv')
     y2000s_nout.to_csv('../DATA/y2000s_nout_clug.csv')
+    X2000s_nout5.to_csv('../DATA/X2000s_nout_clug5.csv')
+    y2000s_nout5.to_csv('../DATA/y2000s_nout_clug5.csv')
