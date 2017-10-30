@@ -153,7 +153,6 @@ def loopyears_time(Xdf, ydf, depyear1, numyears, listyears, featurelist, alphas,
         splitlist = [1, 2, 3, 4, 5]
     else:
         splitlist = [-1]
-    #splitlist = [1, 2]
     mselist = []
     offsetlist = []
     for i in range(0, len(splitlist)):
@@ -180,29 +179,50 @@ def pick_splits(Xdf, ydf, testlist):
     #print(5, len(Xdf3), len(ydf3), len(Xtest), len(ytest))
     return Xdf3, ydf3, Xtest, ytest
 
-def apply_model(Xdf, ydf, features, trainyears, testyears, model, target = 'POP_GROWTH_F1'):
+def apply_model(Xdf, ydf, features, trainyears, testyears, model, target = 'POP_GROWTH_F1', testsplit = -1, no_y = False):
     #def apply_model(Xdf, ydf, features, trainyears, testyears, model):
     #Takes a list of years (trainyears), and then does standard scaling on those years in order to get the file into the same format as was used in the fitting.  Then does the same scaling on the "test" data, which is from the same Xdf, but using the "testyears" list.
-    Xtrainyr = select_years(Xdf, trainyears)
+    #If testsplit = -1, then the test dataframe is presumed to be just in different years from train, but in the same splits.  But if testsplit is more than -1, then that split is set as the test split, while the other splits are put in train.
+    #If no_y = true, then we're applying the model to a dataset for which we don't know the actual target values.  In this case, just set ydf to the same dataframe as Xdf.
+    Xtrainyrt = select_years(Xdf, trainyears)
+    Xtestyrt = select_years(Xdf, testyears)
+    yactualt = select_years(ydf, testyears)
+    Xtrainyr = Xtrainyrt.copy()
+    Xtestyr = Xtestyrt.copy()
+    yactual = yactualt.copy()
+
+    if(testsplit > -1):
+        Xtrainyr, junk, Xtestyr, yactual = pick_splits(Xtrainyrt, yactualt, [testsplit])
     Xtrain = Xtrainyr[features].copy()
-    Xtestyr = select_years(Xdf, testyears)
     Xtest = Xtestyr[features].copy()
+    #print(len(list(Xtrain)))
+    if('split' in list(Xtrain)):
+        Xtrain = Xtrain.drop('split', 1)
+        Xtest = Xtest.drop('split', 1)
+    #print(len(list(Xtrain)))
     scaler = StandardScaler()
     Xscale = scaler.fit_transform(Xtrain)
     Xscaletest = scaler.transform(Xtest)
     ypred = model.best_estimator_.predict(Xscaletest)
-    yactual = select_years(ydf, testyears)
-    yactual['ypredict'] = ypred
-    yactual['residual'] = yactual[target] - yactual['ypredict']
-    if(target == 'POP_GROWTH_F1'):
-        bigtable = Xtest.join(yactual[[target, 'ypredict', 'residual', 'resid_dumb1']])
+    if(no_y == False):
+        yactual['ypredict'] = ypred
+        yactual['residual'] = yactual[target] - yactual['ypredict']
+        if(target == 'POP_GROWTH_F1'):
+            bigtable = Xtestyr.join(yactual[[target, 'ypredict', 'residual', 'resid_dumb1']])
+        else:
+            bigtable = Xtestyr.join(yactual[[target, 'ypredict', 'residual', 'resid_dumb1t5', 'resid_dumb5']])
     else:
-        bigtable = Xtest.join(yactual[[target, 'ypredict', 'residual', 'resid_dumb1t5', 'resid_dumb5']])
+        if(target == 'POP_GROWTH_F1'):
+            Xtestyr['ypredict1'] = ypred
+        else:
+            Xtestyr['ypredict5'] = ypred
+        bigtable = Xtestyr
     return bigtable
 
-
-
 if __name__ == '__main__':
+
+    #I've commented out everything before "final model", because that involves tuning hyperparameters.  Final model executes the final fits.
+
     #Here's my trial with just the 2001 data:
     """Xdf = pd.read_csv('../DATA/X2001_df.csv')
     ydf = pd.read_csv('../DATA/y2001_df.csv')
@@ -397,7 +417,7 @@ if __name__ == '__main__':
     #################################################
     #Trying again with cluster analysis, new features:
     #################################################
-    Xdf = pd.read_csv('../DATA/X2000s_nout_clug.csv')
+    """Xdf = pd.read_csv('../DATA/X2000s_nout_clug.csv')
     ydf = pd.read_csv('../DATA/y2000s_nout_clug.csv')
     #
     #Split off the test data:
@@ -442,7 +462,6 @@ if __name__ == '__main__':
     las_1year, rid_1year, for_1year, mse1, offset1, rmsearr1 = loopyears_time(Xtrain, ytrain, 2009, 4, [-4], featuretime, alphas, forest_params, '_1yearfile.txt')
     #Result is 0.00460483626665
 
-    #Need to copy over the updated version of loopyears_time from scratchpaper.py, and put it in this file.
     #Now, move on to splitting in space.....I'll try 4 years first:
     featurespace = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'growthweight120', 'growthweight220',  'popweight20', 'denseweight20', 'growthweight150', 'growthweight250', 'popweight50', 'denseweight50', 'growthweight1100', 'growthweight2100',  'popweight100', 'denseweight100', 'growthweight1200', 'growthweight2200',  'popweight200', 'denseweight200', 'cluster']
     las_4year_s, rid_4year_s, for_4year_s, mse4_s, offset4_s, rmsearr4_s = loopyears_time(Xtrain, ytrain, 2009, 4, [-4, -3, -2, -1], featurespace, alphas, forest_params, '_4yearfile_s.txt', lincv = 'gkf', forcv = 'gkf', space = True)
@@ -495,17 +514,199 @@ if __name__ == '__main__':
     ydf5 = pd.read_csv('../DATA/y2000s_nout_clug5.csv')
     #Split off the test data:
     testlist = [0]
+    forest_params = {'n_estimators':[100], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[5], 'n_jobs':[-1]}
     Xtrain5, ytrain5, Xtest5, ytest5 = pick_splits(Xdf5, ydf5, testlist)
 
-    las_4year_s5, rid_4year_s5, for_4year_s5, mse4_s5, offset4_s5, rmsearr4_s5 = loopyears_time(Xtrain5, ytrain5, 2007, 4, [-4, -3, -2, -1], featurespace, alphas, forest_params, '_4yearfile_s5.txt', lincv = 'gkf', forcv = 'gkf', space = True, fiveyear = True, dosplit = False)
-    #Result is 0.01389807
+    #Try three years:
+    las_3year_s5, rid_3year_s5, for_3year_s5, mse3_s5, offset3_s5, rmsearr3_s5 = loopyears_time(Xtrain5, ytrain5, 2010, 2, [-7, -6, -5], featurespace, alphas, forest_params, '_3yearfile_s5.txt', lincv = 'gkf', forcv = 'gkf', space = True, fiveyear = True, dosplit = False)
+    #Result is 0.0172141710893
 
-    #And now 5 years:
-    las_5year_s5, rid_5year_s5, for_5year_s5, mse5_s5, offset5_s5, rmsearr5_s5 = loopyears_time(Xtrain5, ytrain5, 2007, 4, [-5, -4, -3, -2, -1], featurespace, alphas, forest_params, '_5yearfile_s5.txt', lincv = 'gkf', forcv = 'gkf', space = True, fiveyear = True, dosplit = False)
-    #Result is 0.0133544983852
+    #And now four years:
+    las_4year_s5, rid_4year_s5, for_4year_s5, mse4_s5, offset4_s5, rmsearr4_s5 = loopyears_time(Xtrain5, ytrain5, 2010, 2, [-8, -7, -6, -5], featurespace, alphas, forest_params, '_4yearfile_s5.txt', lincv = 'gkf', forcv = 'gkf', space = True, fiveyear = True, dosplit = False)
+    #Result is 0.0173372917839
+
+    #Now two years:
+    las_2year_s5, rid_2year_s5, for_2year_s5, mse2_s5, offset2_s5, rmsearr2_s5 = loopyears_time(Xtrain5, ytrain5, 2010, 2, [-6, -5], featurespace, alphas, forest_params, '_2yearfile_s5.txt', lincv = 'gkf', forcv = 'gkf', space = True, fiveyear = True, dosplit = False)
+    #Result is 0.0172352481801
+
+    #Looks like 3 years is the best.
 
     #Output a 5 year model:
     trainyears = [2004, 2005, 2006, 2007, 2008]
     testyears = [2009]
     fortable_s5 = apply_model(Xtrain5, ytrain5, featurespace[:-1], trainyears, testyears, for_5year_s5[2], target = 'POP_GROWTH_F5')
-    fortable_s5.to_csv('../DATA/fortable_s5.csv')
+    fortable_s5.to_csv('../DATA/fortable_s5.csv')"""
+
+    ##########
+    ##Final model:
+    ##########
+
+    Xdf = pd.read_csv('../DATA/X2000s_nout_clug.csv')
+    ydf = pd.read_csv('../DATA/y2000s_nout_clug.csv')
+    #
+    #Split off the test data:
+    testlist = [0]
+    Xtrain, ytrain, Xtest, ytest = pick_splits(Xdf, ydf, testlist)
+
+    Xdf5 = pd.read_csv('../DATA/X2000s_nout_clug5.csv')
+    ydf5 = pd.read_csv('../DATA/y2000s_nout_clug5.csv')
+    #Split off the test data:
+    Xtrain5, ytrain5, Xtest5, ytest5 = pick_splits(Xdf5, ydf5, testlist)
+
+
+
+
+    featurespace = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'growthweight120', 'growthweight220',  'popweight20', 'denseweight20', 'growthweight150', 'growthweight250', 'popweight50', 'denseweight50', 'growthweight1100', 'growthweight2100',  'popweight100', 'denseweight100', 'growthweight1200', 'growthweight2200',  'popweight200', 'denseweight200', 'cluster']
+
+    featurespacelong = ['POP_GROWTH_P1', 'POP_GROWTH_P2', 'POP_GROWTH_P3', 'POP_GROWTH_P4', 'POP_GROWTH_P5', 'INTPTLAT', 'INTPTLONG', 'age_cohort1', 'age_cohort2', 'age_cohort3', 'age_cohort4', 'age_cohort5', 'age_cohort6', 'age_cohort7', 'age_cohort8', 'age_cohort9', 'age_cohort10', 'age_cohort11', 'age_cohort12', 'age_cohort13', 'age_cohort14', 'age_cohort15', 'age_cohort16', 'age_cohort17', 'age_cohort18', 'logpop', 'logland', 'logwater', 'fem_frac', 'growthweight120', 'growthweight220', 'growthweight320', 'growthweight420', 'growthweight520', 'popweight20', 'denseweight20', 'growthweight150', 'growthweight250', 'growthweight350', 'growthweight450', 'growthweight550', 'popweight50', 'denseweight50', 'growthweight1100', 'growthweight2100', 'growthweight3100', 'growthweight4100', 'growthweight5100', 'popweight100', 'denseweight100', 'growthweight1200', 'growthweight2200', 'growthweight3200', 'growthweight4200', 'growthweight5200', 'popweight200', 'denseweight200', 'cluster']
+    alphas = list(np.logspace(-6, 6, num = 20))
+    forest_params = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+
+    #6 year version of final model:
+    las_6year_sfinal, rid_6year_sfinal, for_6year_sfinal, mse6_sfinal, offset6_sfinal, rmsearr6_sfinal = loopyears_time(Xtrain, ytrain, 2016, 1, [-6, -5, -4, -3, -2, -1], featurespacelong, alphas, forest_params, '_6yearfile_sfinal.txt', lincv = 'gkf', forcv = 'gkf', space = True, dosplit = False)
+    #best params: {'max_features': 0.3, 'min_samples_leaf': 5, 'n_estimators': 200, 'n_jobs': -1}
+
+    trainyears = [2010, 2011, 2012, 2013, 2014, 2015]
+    testyears = trainyears
+    featuretemp = list(featurespacelong)
+    featuretemp.remove('cluster')
+    featuretemp.append('split')
+    fortable_s6final = apply_model(Xdf, ydf, featuretemp, trainyears, testyears, for_6year_sfinal[0], testsplit = 0)
+    #RMSE:
+    #np.std(fortable_s6final['residual'])
+    #outputs: 0.0038861230704445504
+    #dumbresid:
+    #np.std(fortable_s6final['resid_dumb1'])
+    #0.005269978519560583
+    fortable_s6final.to_csv('../DATA/fortable_s6final.csv')
+
+    #OK, and now a 6 year version of the model with only the high population counties:
+    Xdfhigh = Xdf[Xdf['logpop'] > 4.39793].copy()
+    ydfhigh = ydf[Xdf['logpop'] > 4.39793].copy()
+    testlist = [0]
+    Xtrainhigh, ytrainhigh, Xtesthigh, ytesthigh = pick_splits(Xdfhigh, ydfhigh, testlist)
+    forest_params = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    las_6year_shfinal, rid_6year_shfinal, for_6year_shfinal, mse6_shfinal, offset6_shfinal, rmsearr6_shfinal = loopyears_time(Xtrainhigh, ytrainhigh, 2016, 1, [-6, -5, -4, -3, -2, -1], featurespacelong, alphas, forest_params, '_6yearfile_shfinal.txt', lincv = 'gkf', forcv = 'gkf', space = True, dosplit = False)
+    #best params: {'max_features': 0.3, 'min_samples_leaf': 5, 'n_estimators': 200, 'n_jobs': -1}
+    #Now apply model to test:
+    fortable_s6hfinal = apply_model(Xdf, ydf, featuretemp, trainyears, testyears, for_6year_shfinal[0], testsplit = 0)
+    #RMSE:
+    #np.std(fortable_s6hfinal['residual'])
+    #outputs: 0.00258160960729639
+    #dumbresid:
+    #np.std(fortable_s6hfinal['resid_dumb1'])
+    #outputs: 0.003172457347470007
+    #What if we compare to the same sample of counties with the other model:
+    #np.std(fortable_s6final[fortable_s6final['logpop'] > 4.39793]['residual'])
+    #Answer is 0.002584433608894394.
+    #So 0.002582 vs. 0.002584.  Essentially no difference.
+
+    #Final 5 year forecast:
+    #3 year:
+    forest_params = {'n_estimators':[200], 'max_features':[0.3, 0.5, 0.7], 'min_samples_leaf':[3, 5], 'n_jobs':[-1]}
+    las_3year_sfinal5, rid_3year_sfinal5, for_3year_sfinal5, mse3_sfinal5, offset3_sfinal5, rmsearr3_sfinal5 = loopyears_time(Xtrain5, ytrain5, 2016, 1, [-7, -6, -5], featurespacelong, alphas, forest_params, '_3yearfile_sfinal5.txt', lincv = 'gkf', forcv = 'gkf', space = True, fiveyear = True, dosplit = False)
+    #best params: {'max_features': 0.5, 'min_samples_leaf': 5, 'n_estimators': 200, 'n_jobs': -1}
+
+    trainyears = [2009, 2010, 2011]
+    testyears = trainyears
+    featuretemp = list(featurespacelong)
+    featuretemp.remove('cluster')
+    featuretemp.append('split')
+    fortable_s3final5 = apply_model(Xdf5, ydf5, featuretemp, trainyears, testyears, for_3year_sfinal5[0], target = 'POP_GROWTH_F5', testsplit = 0)
+    #RMSE:
+    #np.std(fortable_s3final5['residual'])
+    #outputs: 0.010638792178430617
+    #dumbresid:
+    #np.std(fortable_s3final5['resid_dumb5'])
+    #outputs: 0.01733969376496735
+    fortable_s3final5.to_csv('../DATA/fortable_s3final5.csv')
+
+    #OK, now let's take a look at the rmse as a function of logpop:
+    log_pop = []
+    res = []
+    dumres = []
+    res5 = []
+    dumres5 = []
+    for i in range(0,7):
+        log_pop.append(3.25 + (i * 0.5))
+        res.append(np.std(fortable_s6final[(fortable_s6final['logpop'] > 3.0 + (i * 0.5)) & (fortable_s6final['logpop'] <= 3.5 + (i * 0.5))]['residual']))
+        dumres.append(np.std(fortable_s6final[(fortable_s6final['logpop'] > 3.0 + (i * 0.5)) & (fortable_s6final['logpop'] <= 3.5 + (i * 0.5))]['resid_dumb1']))
+        #print(res, dumres, res / dumres)
+        res5.append(np.std(fortable_s3final5[(fortable_s3final5['logpop'] > 3.0 + (i * 0.5)) & (fortable_s3final5['logpop'] <= 3.5 + (i * 0.5))]['residual']))
+        dumres5.append(np.std(fortable_s3final5[(fortable_s3final5['logpop'] > 3.0 + (i * 0.5)) & (fortable_s3final5['logpop'] <= 3.5 + (i * 0.5))]['resid_dumb5']))
+        print(res, dumres, res5, dumres5)
+        #Here's what we have:
+        """In [401]: res
+        Out[401]:
+        [0.006328615655425159,
+         0.005434209238773028,
+         0.0034223927845877947,
+         0.002664265227252902,
+         0.0022060838181944533,
+         0.0013811811216524275,
+         0.0011230420381954664]
+
+        In [402]: dumres
+        Out[402]:
+        [0.008612146637465082,
+         0.0070964853967816315,
+         0.004502217077829622,
+         0.003211450440624126,
+         0.002711246372427638,
+         0.0015130302087926891,
+         0.001106110894514025]
+
+        In [403]: res5
+        Out[403]:
+        [0.01141534872427355,
+         0.014075156839413723,
+         0.009805887291895963,
+         0.009026369760603347,
+         0.008516650627491348,
+         0.006561244407503869,
+         0.0032302640099629064]
+
+        In [404]: dumres5
+        Out[404]:
+        [0.021528839220926837,
+         0.02298724616701108,
+         0.014647239735810743,
+         0.014455890920789973,
+         0.011613187324876813,
+         0.01126453253897688,
+         0.00825439952751786]"""
+        fs2=14
+        fig2 = plt.figure(figsize=(11,9))
+        fig2.subplots_adjust(wspace=0.0,hspace=0.0)
+        ax2 = fig2.add_subplot(111,xlim=[3,6.5],ylim=[0.0,0.025], autoscale_on=False)
+        plot1 = ax2.plot(log_pop, dumres, '-o', color = 'm', linewidth = 2, markersize = 20)
+        plot2 = ax2.plot(log_pop, res, '-o', color = 'r', linewidth = 2, markersize = 20)
+        plot3 = ax2.plot(log_pop, dumres5, '-o', color = 'c', linewidth = 2, markersize = 20)
+        plot4 = ax2.plot(log_pop, res5, '-o', color = 'b', linewidth = 2, markersize = 20)
+        ax2.set_ylabel("rmse")
+        plt.savefig('rmse_vs_pop.eps')
+
+        #Now, let's apply our models to get the 2016 data to get 1 and five year predictions:
+        Xdfall = pd.read_csv('../DATA/X2000s_df.csv')
+        trainyears = [2010, 2011, 2012, 2013, 2014, 2015]
+        testyears = trainyears
+        fortable_2016 = apply_model(Xdfall, Xdfall, featuretemp, trainyears, testyears, for_6year_sfinal[0], testsplit = -1, no_y = True)
+        trainyears5 = [2009, 2010, 2011]
+        testyears5 = trainyears5
+        fortable_2016fin = apply_model(fortable_2016, fortable_2016, featuretemp, trainyears5, testyears5, for_3year_sfinal5[0], target = 'POP_GROWTH_F5', testsplit = -1, no_y = True)
+        fortable_2016fin.to_csv('../DATA/fortable_2016fin.csv')
+
+        #And finally, let's print out our feature importances.  Both from the Lasso regression to get directionality, and from the Random Forest.
+        lasso_coeffs = sorted(list(zip(featurespacelong, las_6year_sfinal[0].best_estimator_.coef_.tolist())), key=lambda x: x[1], reverse = True)
+        print(lasso_coeffs)
+        for_importances = sorted(list(zip(featurespacelong, for_6year_sfinal[0].best_estimator_.feature_importances_.tolist())), key=lambda x: x[1], reverse = True)
+        print(for_importances)
+        lasso_coeffs5 = sorted(list(zip(featurespacelong, las_3year_sfinal5[0].best_estimator_.coef_.tolist())), key=lambda x: x[1], reverse = True)
+        print(lasso_coeffs5)
+        for_importances5 = sorted(list(zip(featurespacelong, for_3year_sfinal5[0].best_estimator_.feature_importances_.tolist())), key=lambda x: x[1], reverse = True)
+        print(for_importances5)
+        #I've copied these over into featureimportances.txt.
+
+
+
+#

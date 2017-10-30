@@ -268,11 +268,11 @@ if __name__ == '__main__':
     #X2001_logs_df = makelog(X2001_df)
     #Problem.....some of the counties have zero values for AWATER_SQMI, so logarithm doesn't work.  Here's a list of those with low values:
     """
-           GEOID  YEAR      0  POP_GROWTH_P  ALAND_SQMI  AWATER_SQMI   INTPTLAT  \
+    """       GEOID  YEAR      0  POP_GROWTH_P  ALAND_SQMI  AWATER_SQMI   INTPTLAT  \
     15675  20071  2001   1524     -0.001706     778.404        0.000  38.480404
     47108  48501  2001   7299      0.001490     799.715        0.013  33.162398
     49692  51610  2001  10550      0.004510       2.051        0.000  38.884722
-    49862  51685  2001  10777      0.019450       2.539        0.000  38.768945
+    49862  51685  2001  10777      0.019450       2.539        0.000  38.768945"""
     """
     #So only three counties with zero.  Let's just set everything below 0.01 to 0.01.  I've changed makelog to do this now.  Here's the redo:
 
